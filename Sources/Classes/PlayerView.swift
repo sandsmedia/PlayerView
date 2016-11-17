@@ -24,6 +24,7 @@ public typealias PVPlayer = AVQueuePlayer
 public typealias PVPlayerItem = AVPlayerItem
 
 public protocol PlayerViewDelegate: class {
+    func customHeader(_ player: PlayerView) -> Dictionary<String, String>
     func playerVideo(_ player: PlayerView, statusPlayer: PVStatus, error: NSError?)
     func playerVideo(_ player: PlayerView, statusItemPlayer: PVItemStatus, error: NSError?)
     func playerVideo(_ player: PlayerView, loadedTimeRanges: [PVTimeRange])
@@ -94,9 +95,10 @@ private extension CMTime {
     static var zero:CMTime { return kCMTimeZero }
 }
 /// A simple `UIView` subclass that is backed by an `AVPlayerLayer` layer.
-@objc open class PlayerView: UIView {
+@objc open class PlayerView: UIView, AVAssetResourceLoaderDelegate {
     
-    
+    // set a custom scheme to catch requests in resourceLoader:shouldWaitForLoadingOfRequestedResource:
+    let customScheme = ""
     
     fileprivate var playerLayer: AVPlayerLayer {
         return layer as! AVPlayerLayer
@@ -106,7 +108,33 @@ private extension CMTime {
     fileprivate weak var lastPlayerTimeObserve: PVPlayer?
     
     fileprivate var urlsQueue: [URL]?
-    //MARK: - Public Variables
+    
+    // MARK: - Implementation of AVAssetResourceLoaderDelegate protocols
+    
+    // Will only catch requests with none http or https schemes
+    public func resourceLoader(_ resourceLoader: AVAssetResourceLoader, shouldWaitForLoadingOfRequestedResource loadingRequest: AVAssetResourceLoadingRequest) -> Bool {
+        print(resourceLoader)
+        print(loadingRequest)
+        if var url = loadingRequest.request.url {
+            if(url.scheme == customScheme) {
+                let scheme = customScheme + "://"
+                let schemeLength = scheme.characters.count
+                var urlString = url.absoluteString
+                let range = urlString.startIndex..<urlString.index(urlString.startIndex, offsetBy: schemeLength)
+                urlString.removeSubrange(range)
+                url = Foundation.URL(string: urlString)!
+                print(loadingRequest.request)
+                
+                var request = loadingRequest.request
+                request.url = url
+                print(request)
+            }
+        }
+        
+        return true
+    }
+    
+    // MARK: - Public Variables
     open weak var delegate: PlayerViewDelegate?
     
     open var loopVideosQueue = false
@@ -168,12 +196,12 @@ private extension CMTime {
             player?.rate = newValue
         }
     }
-    // MARK: private Functions
     
+    // MARK: private Functions
     
     /**
      Add all observers for a PVPlayer
-    */
+     */
     func addObserversPlayer(_ avPlayer: PVPlayer) {
         avPlayer.addObserver(self, forKeyPath: "status", options: [.new], context: &statusContext)
         avPlayer.addObserver(self, forKeyPath: "rate", options: [.new], context: &rateContext)
@@ -181,7 +209,7 @@ private extension CMTime {
     }
     
     /**
-        Remove all observers for a PVPlayer
+     Remove all observers for a PVPlayer
      */
     func removeObserversPlayer(_ avPlayer: PVPlayer) {
         
@@ -223,7 +251,7 @@ private extension CMTime {
             if let mySelf = self {
                 self?.delegate?.playerVideo(mySelf, currentTime: mySelf.currentTime)
             }
-        } as AnyObject?
+            } as AnyObject?
     }
     
     func playerItemDidPlayToEndTime(_ aNotification: Notification) {
@@ -340,15 +368,29 @@ private extension CMTime {
             //reset before put another URL
             
             urlsQueue = urls
-            let playerItems = urls.map { (url) -> PVPlayerItem in
-                return PVPlayerItem(url: url)
-            }
+            var playerItems = [PVPlayerItem]()
+            
+            urls.forEach({(url) in
+                var urlString = url.absoluteString
+                if customScheme != "" {
+                    urlString = customScheme + "://" + url.absoluteString
+                }
+                if let customURL = Foundation.URL(string: urlString) {
+                    let headers = self.delegate?.customHeader(self)
+                    let asset = AVURLAsset(url: customURL as URL, options: ["AVURLAssetHTTPHeaderFieldsKey": headers])
+                    print(headers)
+                    let queue = DispatchQueue(label: "PVPlayerQueue")
+                    asset.resourceLoader.setDelegate(self, queue: queue)
+                    
+                    let itemNew = PVPlayerItem(asset: asset)
+                    playerItems.append(itemNew)
+                }
+            })
             
             let avPlayer = PVPlayer(items: playerItems)
             self.player = avPlayer
             
             avPlayer.actionAtItemEnd = .pause
-            
             
             let playerItem = avPlayer.currentItem!
             
@@ -363,16 +405,20 @@ private extension CMTime {
         let item = afterItem ?? player?.items().last
         
         urlsQueue?.append(contentsOf: urls)
-        //for each url found
-        urls.forEach({ (url) in
-            
-            //create a video item
-            let itemNew = PVPlayerItem(url: url)
-            
-            //and insert the item on the player
-            player?.insert(itemNew, after: item)
+        urls.forEach({(url) in
+            var urlString = url.absoluteString
+            if customScheme != "" {
+                urlString = customScheme + "://" + url.absoluteString
+            }
+            if let customURL = Foundation.URL(string: urlString) {
+                let asset = AVURLAsset(url: customURL as URL, options: nil)
+                let queue = DispatchQueue(label: "PVPlayerQueue")
+                asset.resourceLoader.setDelegate(self, queue: queue)
+                
+                let itemNew = PVPlayerItem(asset: asset)
+                player?.insert(itemNew, after: item)
+            }
         })
-        
     }
     open func addVideosOnQueue(_ urls: URL..., afterItem: PVPlayerItem? = nil) {
         return addVideosOnQueue(urls: urls,afterItem: afterItem)
@@ -405,6 +451,7 @@ private extension CMTime {
         delegate = nil
         resetPlayer()
     }
+    
     // MARK: private variables for context KVO
     
     fileprivate var statusContext = true
@@ -415,12 +462,7 @@ private extension CMTime {
     fileprivate var rateContext = true
     fileprivate var playerItemContext = true
     
-    
-    
     open override func observeValue(forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey : Any]?, context: UnsafeMutableRawPointer?) {
-        
-        //print("CHANGE",keyPath)
-        
         
         if context == &statusContext {
             
