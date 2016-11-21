@@ -77,7 +77,7 @@ public enum PlayerViewFillMode {
         }
     }
     
-    var AVLayerVideoGravity:String {
+    var AVLayerVideoGravity: String {
         get {
             switch self {
             case .resizeAspect:
@@ -92,7 +92,7 @@ public enum PlayerViewFillMode {
 }
 
 private extension CMTime {
-    static var zero:CMTime { return kCMTimeZero }
+    static var zero: CMTime { return kCMTimeZero }
 }
 /// A simple `UIView` subclass that is backed by an `AVPlayerLayer` layer.
 @objc open class PlayerView: UIView, AVAssetResourceLoaderDelegate {
@@ -375,9 +375,9 @@ private extension CMTime {
                 if customScheme != "" {
                     urlString = customScheme + "://" + url.absoluteString
                 }
-                if let customURL = Foundation.URL(string: urlString) {
+                if let customURL = URL(string: urlString) {
                     let headers = self.delegate?.customHeader(self)
-                    let asset = AVURLAsset(url: customURL as URL, options: ["AVURLAssetHTTPHeaderFieldsKey": headers])
+                    let asset = AVURLAsset(url: customURL, options: ["AVURLAssetHTTPHeaderFieldsKey": headers])
                     print(headers)
                     let queue = DispatchQueue(label: "PVPlayerQueue")
                     asset.resourceLoader.setDelegate(self, queue: queue)
@@ -410,8 +410,8 @@ private extension CMTime {
             if customScheme != "" {
                 urlString = customScheme + "://" + url.absoluteString
             }
-            if let customURL = Foundation.URL(string: urlString) {
-                let asset = AVURLAsset(url: customURL as URL, options: nil)
+            if let customURL = URL(string: urlString) {
+                let asset = AVURLAsset(url: customURL, options: nil)
                 let queue = DispatchQueue(label: "PVPlayerQueue")
                 asset.resourceLoader.setDelegate(self, queue: queue)
                 
