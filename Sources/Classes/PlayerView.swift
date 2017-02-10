@@ -113,8 +113,6 @@ private extension CMTime {
     
     // Will only catch requests with none http or https schemes
     public func resourceLoader(_ resourceLoader: AVAssetResourceLoader, shouldWaitForLoadingOfRequestedResource loadingRequest: AVAssetResourceLoadingRequest) -> Bool {
-        print(resourceLoader)
-        print(loadingRequest)
         if var url = loadingRequest.request.url {
             if(url.scheme == customScheme) {
                 let scheme = customScheme + "://"
@@ -123,11 +121,8 @@ private extension CMTime {
                 let range = urlString.startIndex..<urlString.index(urlString.startIndex, offsetBy: schemeLength)
                 urlString.removeSubrange(range)
                 url = Foundation.URL(string: urlString)!
-                print(loadingRequest.request)
-                
                 var request = loadingRequest.request
                 request.url = url
-                print(request)
             }
         }
         
@@ -378,7 +373,6 @@ private extension CMTime {
                 if let customURL = URL(string: urlString) {
                     let headers = self.delegate?.customHeader(self)
                     let asset = AVURLAsset(url: customURL, options: ["AVURLAssetHTTPHeaderFieldsKey": headers])
-                    print(headers)
                     let queue = DispatchQueue(label: "PVPlayerQueue")
                     asset.resourceLoader.setDelegate(self, queue: queue)
                     
